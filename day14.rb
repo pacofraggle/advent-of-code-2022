@@ -20,6 +20,18 @@ module Advent2022
 
       path
     end
+
+    def self.coords(path)
+      return if path.nil? || path.size == 0
+
+      coords = Set.new
+      coords << path[0]
+      1.upto(path.size-1) do |i|
+        path[i].path_to(path[i-1]).each { |c| coords << c }
+      end
+
+      coords.to_a
+    end
   end
 
   class SparseCaveSlice
@@ -31,30 +43,22 @@ module Advent2022
 
     def initialize(initial, add_floor=false)
       @floored = add_floor
-
       @obstacles = {} 
-
       @initial = initial
+
       mark(@initial, INI)
       @upper_left = Coord.new(INFINITY, 0)
       @lower_right = Coord.new(0, 0)
     end
 
     def add(path)
-      mark(path[0], ROCK)
-
-      1.upto(path.size-1) do |i|
-        a = path[i]
-        b = path[i-1]
-        a.path_to(b).each { |c| mark(c, ROCK) }
-      end
+      Coord.coords(path).each { |c| mark(c, ROCK) }
     end
 
     def to_a
       close_map
 
       shift_x = @upper_left.x
-
       w = @lower_right.x - @upper_left.x + 1
       h = @lower_right.y + 1
 
@@ -81,7 +85,7 @@ module Advent2022
     end
 
     def sand_amount
-      @obstacles.select { |obs, v| v == SAND }.count
+      @obstacles.select { |_, v| v == SAND }.count
     end
 
     def close_map
@@ -104,11 +108,11 @@ module Advent2022
 
     def spill_sand
       close_map
-      space = true
+      room = true
       i = 0
-      while space do
+      while room do
         i += 1
-        space = fall(@initial)
+        room = fall(@initial)
       end
 
       i-1
@@ -117,7 +121,7 @@ module Advent2022
     def overflow_sand
       close_map
       i = 0
-      while true do
+      while true do # ungh!!
         i += 1
         break if fall(@initial) == @initial
       end
@@ -180,7 +184,6 @@ module Advent2022
   end
 
   class RegolithReservoir
-  
     attr_reader :cave
 
     def initialize(cave)
@@ -218,15 +221,12 @@ module Advent2022
   class Day14
     def self.run(argv)
       rr = RegolithReservoir.from(argv[0])
-      rr.cave.close_map
       #rr.cave.print
-
       units = rr.spill
       #rr.cave.print
       puts "Part1: #{units}"
 
       rr = RegolithReservoir.from(argv[0], true)
-      rr.cave.close_map
       #rr.cave.print
       units = rr.overflow
       #rr.cave.print
