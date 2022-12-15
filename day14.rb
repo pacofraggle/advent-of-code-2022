@@ -218,6 +218,9 @@ module Advent2022
     end
   end
 
+  # I got in trouble here because I based my solution on the visualization aspect
+  # I had to redo everything for Part 2
+  # It looked like a tree traversing problem. I used recursivity to solve it
   class Day14
     def self.run(argv)
       rr = RegolithReservoir.from(argv[0])

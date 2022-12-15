@@ -155,6 +155,8 @@ module Advent2022
     end
   end
 
+  # Reading the file was easy-peasy due to Ruby's eval
+  # First one about recursivity
   class Day13
     def self.run(argv)
       ds = DistressSignal.from(argv[0])

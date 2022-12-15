@@ -86,7 +86,6 @@ module Advent2022
     end
   end
 
-
   class Day03
     def self.run(argv)
       sacks = Rucksacks.from_file(argv[0])

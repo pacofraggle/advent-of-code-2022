@@ -1,7 +1,3 @@
-
-# A = rock      A > C, B > A, C > B
-# B = paper
-# C = scissors
 module Advent2022
   class RockPaperScissors
 
@@ -85,6 +81,10 @@ module Advent2022
     end
   end
 
+
+  # A = rock      A > C, B > A, C > B
+  # B = paper
+  # C = scissors
   class Day02
     def self.run(argv)
       rules = RockPaperScissors::Rules1.new({'X' => 'A', 'Y' => 'B', 'Z' => 'C'})

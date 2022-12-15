@@ -29,7 +29,7 @@ module Advent2022
     def test_row_room_for_beacons
       z = BeaconExclusionZone.from(sample)
 
-      row = z.row_room_for_beacons(10, 0, 20, false)
+      row = z.row_room_for_beacons(10, 0, 20)
 
       assert true, row.full?
     end

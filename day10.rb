@@ -124,6 +124,10 @@ module Advent2022
     end
   end
 
+  # This one was hard to understand.
+  # It's based on ATARI's refresh mode, I think.
+  # It was fun that it had a graphic output
+  # I had issues tuning the cycle changes
   class Day10
     def self.run(argv)
       cr = CatodeRay.from_file(argv[0])

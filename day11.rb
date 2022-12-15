@@ -167,6 +167,13 @@ module Advent2022
     end
   end
 
+  # I spent a lot of time trying to speed up the divisions
+  # All of them are divisions by prime numbers and found rules to optimize them
+  # However numbers kept being very large. This was the key sentence:
+  #
+  # > you'll need to find another way to keep your worry levels manageable. 
+  #
+  # The exercise was all about the use of the remainder (see FastMonkey)
   class Day11
     def self.run(argv)
       mb = MonkeyBusiness.from_setup(argv[0], false)

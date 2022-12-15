@@ -218,6 +218,9 @@ module Advent2022
     end
   end
 
+  # Dijkstra solution I implemented following the Wikipedia returns the
+  # paths to all points, so I decided to use that by reversing the map
+  # and using the inverse of the heights to use the same rules
   class Day12
     def self.run(argv)
       hc = HillClimbing.from_grid(argv[0])

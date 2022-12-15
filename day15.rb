@@ -159,11 +159,15 @@ module Advent2022
       min_x = min.nil? ? @min_x : min
       max_x = max.nil? ? @max_x : max
 
-      covered = row_room_for_beacons(y, min_x, max_x, true)
+      covered = row_room_for_beacons(y, min_x, max_x)
+      sensors.each do |s|
+        covered.unset(s.beacon.x) if s.beacon.y == y
+      end
+
       covered.count
     end
 
-    def row_room_for_beacons(y, min, max, remove_existing=true)
+    def row_room_for_beacons(y, min, max)
       covered = Block.new(min, max)
       range = IntegerRange.new(min, max)
 
@@ -172,19 +176,13 @@ module Advent2022
         break if covered.full?
       end
   
-      if remove_existing
-        sensors.each do |s|
-          covered.unset(s.beacon.x) if s.beacon.y == y
-        end
-      end
-
       covered
     end
 
     def beacon_space(min, max)
       (min..max).each_with_index do |i, idx|
         #puts "idx #{idx}" if idx % 1000 == 0
-        covered = row_room_for_beacons(i, min, max, false)
+        covered = row_room_for_beacons(i, min, max)
         if !covered.full?
           return Point.new(covered.uncovered, i)
         end
@@ -215,6 +213,26 @@ module Advent2022
     end
   end
 
+  # Part1 easy but slow. Impossible to approach Part2 with the same strategy
+  # I tried to optimize by
+  #  - cutting the distance calculation ASAP
+  #  - finding the covering by rows / cols
+  #
+  # For the big window I tried
+  #  - An array of booleans
+  #  - An array of integers
+  #  - A hash
+  #
+  # However the foundational issue was the need to iterate 4M rows
+  # and 4M cols, so it turned manageable by replacing checking 4M cols with
+  # checking the 38 balls and seeing if there's not a full cover
+  # For that Ranges fit perfectly
+  #
+  # TODO: Explore this idea from the Slack channel:
+  # > ... I made the observation that if there is only a single point then
+  # > it must be at the manhattan distance + 1 of one of the sensors so I
+  # just iterated all of the points that were at M+1 of each sensor and
+  # checked if it was also out of range of all other sensors
   class Day15
     def self.run(argv)
       o = BeaconExclusionZone.from(argv[0])
