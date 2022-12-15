@@ -31,10 +31,10 @@ module Advent2022
 
       row = z.row_room_for_beacons(10, 0, 20, false)
 
-      assert 0, row.count(true) 
+      assert true, row.full?
     end
 
-    def test_beacons
+    def test_beacon_space
       z = BeaconExclusionZone.from(sample)
 
       beacon = z.beacon_space(0, 20)

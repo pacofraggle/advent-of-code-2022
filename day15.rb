@@ -1,13 +1,77 @@
 require 'set'
 
 module Advent2022
+  class Block
+    attr_reader :data
+
+    def initialize(min, max)
+      @width = max - min + 1
+      @data = []
+      @deleted = Set.new
+
+      @min = min
+      @max = max
+    end
+
+    def fill(range)
+      @data << range
+
+      @data = IntegerRange.merge_overlapping(@data)
+    end
+
+    def unset(pos)
+      @deleted << pos
+    end
+
+    def full?
+      @data.size == 1 && @deleted.size == 0 && @data.first.size == @width
+    end
+
+    def count
+      n = 0
+      @data.each { |intv| n += intv.size }
+
+      n - @deleted.size
+    end
+
+    def uncovered
+      (@min..@max).each do |pos| 
+        i = @data.find { |intv| intv.include?(pos) } 
+        return pos if i.nil?
+      end
+
+      nil
+    end
+  end
+
+  class IntegerRange < Range
+    def overlap?(other)
+      self.include?(other.begin) || other.include?(self.begin) || self.end + 1 == other.begin || other.end + 1 == self.begin
+    end
+
+    def intersect(other)
+      IntegerRange.new([self.begin, other.begin].max, [self.end, other.end].min)
+    end
+
+    def union(other)
+      IntegerRange.new([self.begin, other.begin].min, [self.end, other.end].max)
+    end
+
+    def self.merge_overlapping(overlapping_ranges)
+      overlapping_ranges.sort_by(&:begin).inject([]) do |ranges, range|
+        last = ranges.last
+        if !ranges.empty? && last.overlap?(range)
+          ranges[0...-1] + [last.union(range)]
+        else
+          ranges + [range]
+        end
+      end
+    end
+  end
+
   Point = Struct.new(:x, :y) do
     def d(other)
       (self.x - other.x).abs + (self.y - other.y).abs
-    end
-
-    def coord_d(x, y)
-      (self.x - x).abs + (self.y - y).abs
     end
 
     def tuning_freq
@@ -23,8 +87,6 @@ module Advent2022
       @beacon = beacon
 
       @ball_radius = @sensor.d(@beacon)
-      @x = @sensor.x
-      @y = @sensor.y
     end
 
     def in_ball?(point)
@@ -32,44 +94,30 @@ module Advent2022
     end
 
     def in_ball_coord?(x, y)
-      #dy = (@y - y).abs 
-
-      #bx = @ball_radius - dy
-      #return false if bx < 0
-
-      #return x >= @x - bx && x <= @x + bx
-
-      dy = (@y - y).abs 
+      dy = (@sensor.y - y).abs 
       return false if dy > @ball_radius
 
-      dx = (@x - x).abs 
+      dx = (@sensor.x - x).abs 
       return false if dx > @ball_radius
 
       dx + dy <= @ball_radius
     end
 
-    def ball_fill_row!(row, y, xmin, xmax)
-      dy = (@y - y).abs 
-
+    def ball_fill_row!(row, y, range)
+      dy = (@sensor.y - y).abs 
       return if dy > @ball_radius
 
       bx = @ball_radius - dy
 
-      xminb = @x - bx
-      return if xminb > xmax
-      xmaxb = @x + bx
-      return if xmaxb < xmin
+      xminb = @sensor.x - bx
+      return if xminb > range.end
+      xmaxb = @sensor.x + bx
+      return if xmaxb < range.begin
 
-      ini = xmin > xminb ? xmin : xminb
-      fin = xmax > xmaxb ? xmaxb : xmax
-
-      (ini..fin).each do |pos|
-        row[pos-xmin] = true
-      end
-    end
-
-    def box
-      return Point.new(@sensor.x-@ball_radius, @sensor.y-@ball_radius), Point.new(@sensor.x+@ball_radius, @sensor.y+@ball_radius)
+      ball_range = IntegerRange.new(xminb, xmaxb)
+      check_range = ball_range.intersect(range)
+      
+      row.fill(check_range)
     end
   end
 
@@ -107,34 +155,26 @@ module Advent2022
       o
     end
 
-    def check_row(y, remove_beacons=true, min=nil, max=nil)
+    def check_row(y, min=nil, max=nil)
       min_x = min.nil? ? @min_x : min
       max_x = max.nil? ? @max_x : max
 
-      covered = row_room_for_beacons(y, min_x, max_x, remove_beacons)
-      covered.count(true)
+      covered = row_room_for_beacons(y, min_x, max_x, true)
+      covered.count
     end
 
     def row_room_for_beacons(y, min, max, remove_existing=true)
-      #puts "Row #{y}"
-      row = Range.new(min, max)
-      covered = Array.new(row.size, false)
+      covered = Block.new(min, max)
+      range = IntegerRange.new(min, max)
 
       sensors.each do |s|
-        s.ball_fill_row!(covered, y, min, max)
+        s.ball_fill_row!(covered, y, range)
+        break if covered.full?
       end
   
-#      row.each do |x|
-#        sensors.each do |s|
-#          if s.in_ball_coord?(x, y)
-#            covered[x-min] = true
-#          end
-#        end
-#      end
-
       if remove_existing
         sensors.each do |s|
-          covered[s.beacon.x-min] = false if s.beacon.y == y
+          covered.unset(s.beacon.x) if s.beacon.y == y
         end
       end
 
@@ -142,15 +182,22 @@ module Advent2022
     end
 
     def beacon_space(min, max)
-      width = max - min + 1
-      (min..max).each do |y|
-        covered = row_room_for_beacons(y, min, max, false)
-        if covered.count(false) > 0
-          covered.each_with_index do |val, col|
-            return Point.new(col+min, y) unless val
-          end
+      (min..max).each_with_index do |i, idx|
+        #puts "idx #{idx}" if idx % 1000 == 0
+        covered = row_room_for_beacons(i, min, max, false)
+        if !covered.full?
+          return Point.new(covered.uncovered, i)
         end
       end
+    end
+
+    def clock
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
+    def elapsed(msg, starting)
+      ending = clock
+      puts "#{msg} elapsed: #{ending-starting} sec" 
     end
 
     private
@@ -171,21 +218,18 @@ module Advent2022
   class Day15
     def self.run(argv)
       o = BeaconExclusionZone.from(argv[0])
-      o.sensors.each_with_index do |s, i|
-        puts "#{i}: #{s.ball_radius}"
-      end
-      
+      #o.sensors.each_with_index do |s, i|
+      #  puts "#{i}: #{s.ball_radius}"
+      #end
 
-      starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      starting = o.clock
       puts "Part 1: #{o.check_row(2000000)}"
-      ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      puts "Elapsed: #{ending-starting} sec" 
+      o.elapsed("Part 1", starting)
 
-      #starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      starting = o.clock
       beacon = o.beacon_space(0, 4000000)
       puts "Part 2: #{beacon.tuning_freq}"
-      #ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      #puts "Elapsed: #{ending-starting} sec" 
+      o.elapsed("Part 2", starting)
     end
   end
 end
