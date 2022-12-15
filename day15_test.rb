@@ -22,6 +22,26 @@ module Advent2022
       assert_equal 26, z.check_row(10)
     end
 
+    def test_tuning_freq
+      assert_equal 56000011, Point.new(14, 11).tuning_freq
+    end
+
+    def test_row_room_for_beacons
+      z = BeaconExclusionZone.from(sample)
+
+      row = z.row_room_for_beacons(10, 0, 20, false)
+
+      assert 0, row.count(true) 
+    end
+
+    def test_beacons
+      z = BeaconExclusionZone.from(sample)
+
+      beacon = z.beacon_space(0, 20)
+
+      assert_equal Point.new(14, 11), beacon
+    end
+
     def sample
       sample = <<EOS
 Sensor at x=2, y=18: closest beacon is at x=-2, y=15
