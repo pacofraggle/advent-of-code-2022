@@ -1,30 +1,31 @@
 module Advent2022
   class Shape
-    attr_reader :shape
+    attr_reader :shape, :name
 
-    def initialize(shape)
+    def initialize(name, shape)
       @shape = shape
+      @name = name
     end
 
     class << self
       def square
-        Shape.new([[1, 1, 0, 0], [1, 1, 0, 0]])
+        Shape.new(:o, [[1, 1], [1, 1]])
       end
 
       def vbar
-        Shape.new([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]])
+        Shape.new(:i, [[1], [1], [1], [1]])
       end
 
       def iel
-        Shape.new([[1, 1, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]])
+        Shape.new(:l, [[1, 1, 1], [0, 0, 1], [0, 0, 1]])
       end
 
       def cross
-        Shape.new([[0, 1, 0, 0], [1, 1, 1, 0], [0, 1, 0, 0]])
+        Shape.new(:x, [[0, 1], [1, 1, 1], [0, 1]])
       end
 
       def hbar
-        Shape.new([[1, 1, 1, 1]])
+        Shape.new(:m, [[1, 1, 1, 1]])
       end
     end
   end
@@ -45,6 +46,10 @@ module Advent2022
 
       def shape
         @shape.shape
+      end
+
+      def name
+        @shape.name
       end
     end
 
@@ -88,6 +93,7 @@ module Advent2022
     end
 
     def move(dir)
+      dir = dir == "<" ? -1 : 1
       #puts "move #{dir}"
       @falling.shape.each_with_index do |rock_row, i|
         cave = row(@falling.y + i).clone
@@ -201,7 +207,7 @@ module Advent2022
       dir = @jet[@flow % @jet.size]
       @flow+= 1
 
-      dir == "<" ? -1 : 1
+      dir
     end
 
     def self.from(data)
@@ -213,20 +219,33 @@ module Advent2022
 
     def free_throw
       fall = true
-      cave.add_rock(next_rock)
+      rock = next_rock
+      cave.add_rock(rock)
+      seq = rock.name.to_s
       while fall do
-        cave.move(next_flow)
+        dir = next_flow
+        cave.move(dir)
+        seq += dir
         #cave.print
         fall = cave.fall
         #cave.print
       end
+
+      seq
     end
 
     def play(n=1)
+      @seqs = {}
       #cave.print
       1.upto(n) do |i|
-        #puts "#{i} / #{cave.top} / #{cave.height} ---------------------------" if i % 1000 == 0
-        free_throw
+        puts "#{i} / #{cave.top} / #{cave.height} ---------------------------" if i % 100000 == 0
+        seq = free_throw
+
+        if @seqs[seq]
+          #puts "#{i}: Repeated #{seq} #{@seqs[seq].size} at #{i} - #{cave.height}"
+          puts "#{i} => #{cave.height*1000000000000/i}" if i % 10000 == 0
+        end
+        @seqs[seq] = i unless @seqs.size > 200
       end
 
       cave.height
@@ -242,9 +261,10 @@ module Advent2022
      
       puts "Part 1: #{o.play(2022)}"
 
-      #o = PyroclasticFlow.from(argv[0], true)
+      #o = PyroclasticFlow.from(argv[0])
       #o = PyroclasticFlow.from(jet_pattern)
       #puts "Part 2: #{o.play(1000000000000)}"
+      puts "Part 2: NOT YET"
     end
   end
 end
