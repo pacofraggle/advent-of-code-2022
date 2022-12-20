@@ -131,6 +131,7 @@ module Advent2022
   class Day19
     def self.run(argv)
       o = NotEnoughMinerals.from(argv[0])
+      puts "NOT YET"
      
     end
   end
