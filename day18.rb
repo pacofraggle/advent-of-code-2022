@@ -70,10 +70,11 @@ module Advent2022
         (ymin-1).upto(ymax+1) do |y|
           (zmin-1).upto(zmax+1) do |z|
             cube = Cube.new(x, y, z)
-            box << cube unless @cubes.include?(cube)
+            box << cube
           end
         end
       end
+      box = box - @cubes
 
       q = []
       q << box.first
