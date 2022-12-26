@@ -1,3 +1,4 @@
+require 'pry'
 module Advent2022
   class Shape
     attr_reader :shape, :name
@@ -53,11 +54,12 @@ module Advent2022
       end
     end
 
-    def initialize
+    def initialize(prune = false)
       @rows = Array.new
-      @rows << Array.new(9, 1)
+      @prune = prune
+      @min = 0
+      @trimmed = 0
     end
-
 
     def add_row(row)
       @rows << row
@@ -71,6 +73,13 @@ module Advent2022
       end
     end
 
+    def trim_cave(min)
+      return if min == -1
+
+      (min+1).times { @rows.shift }
+      @trimmed += min + 1
+    end
+
     def blank_row
       [1, 0, 0, 0, 0, 0, 0, 0, 1]
     end
@@ -80,7 +89,7 @@ module Advent2022
     end
 
     def height
-      top
+      top + 1 + @trimmed
     end
 
     def row(i)
@@ -93,8 +102,6 @@ module Advent2022
     end
 
     def move(dir)
-      dir = dir == "<" ? -1 : 1
-      #puts "move #{dir}"
       @falling.shape.each_with_index do |rock_row, i|
         cave = row(@falling.y + i).clone
         rock_row.each_with_index do |elm, j|
@@ -111,21 +118,24 @@ module Advent2022
     end
 
     def fall
-      #puts "fall"
       sit = false
-      @falling.shape.each_with_index do |rock_row, i|
-        cave = row(@falling.y + i - 1).clone
-        rock_row.each_with_index do |elm, j|
-          pos = @falling.x + j
-          if pos < cave.size
-            cave[pos] += elm 
-            if cave[pos] > 1
-              sit = true
-              break
+      if @falling.y < 1
+        sit = true
+      else
+        @falling.shape.each_with_index do |rock_row, i|
+          cave = row(@falling.y + i - 1).clone
+          rock_row.each_with_index do |elm, j|
+            pos = @falling.x + j
+            if pos < cave.size
+              cave[pos] += elm 
+              if cave[pos] > 1
+                sit = true
+                break
+              end
             end
           end
+          break if sit
         end
-        break if sit
       end
 
       if sit
@@ -138,6 +148,7 @@ module Advent2022
     end
 
     def sit_falling
+      full = []
       @falling.shape.each_with_index do |rock_row, i|
         cave = row(@falling.y + i).clone
         rock_row.each_with_index do |elm, j|
@@ -145,15 +156,14 @@ module Advent2022
           cave[pos] += elm if pos < cave.size
         end
         set_row(@falling.y + i, cave)
-        #if cave.sum == 9
-        #  puts "Tetris found at #{@falling.y + i}"
-        #end
+        full << @falling.y + i if cave.sum == 9
       end
-
       @falling = nil
+
+      trim_cave(full.max) if @prune && !full.empty?
     end
 
-    def print
+    def print(n=nil)
       puts
      
       @board = Array.new
@@ -174,10 +184,16 @@ module Advent2022
           end
         end
       end
- 
-      @board.reverse.each do |row|
+      n = n.nil? ? @board.size : n
+      @board.reverse.each_with_index do |row, i|
         puts row.join("").gsub(/0/, ".").gsub(/1/, "#")
+        if i == n
+          puts "..."
+          break
+        end
       end
+      puts "#########"
+      puts @floor.to_s
       puts
     end
   end
@@ -188,12 +204,105 @@ module Advent2022
 
     attr_reader :cave
 
-    def initialize(pattern)
+    def initialize(pattern, prune=false)
       @rock = 0
-      @flow = 0
+      @flow = -1
       @jet = pattern
 
-      @cave = Cave.new
+      @cave = Cave.new(prune)
+
+      prepare_stats
+    end
+
+    def estimate
+      @estimating = true
+    end
+
+    def self.from(data, prune = false)
+      data = File.read(data) if File.exist?(data)
+
+      l = data.strip
+      PyroclasticFlow.new(l, prune)
+    end
+
+    def play(n=1)
+      @estimate = n if @estimating
+      estimation = nil
+      1.upto(n) do |i|
+        estimation = free_throw(i)
+
+        break unless estimation.nil? 
+      end
+
+      if @estimating
+        return estimation if estimation
+        calculate_estimation
+      else
+        cave.height
+      end
+    end
+
+    private
+
+    def prepare_stats
+      @estimating = false
+      @estimate = -1
+
+      @seqs = [-1]
+      @seqs_data = [{}]
+      @repeated = 0
+      @rep_start = -1
+      @rep_end = -1
+      @rep_start_value = -1
+    end
+
+    def record(current_piece, current_rock, current_flow, height)
+      return unless @estimating
+
+      @seqs << current_flow
+      @seqs_data << { iteration: current_piece, rock: current_rock, height: height }
+
+      if @rep_start == -1
+        prev = nil
+        (@seqs.size-2).downto(1) do |i|
+          if @seqs[i] == current_flow && @seqs_data[i][:rock] == current_rock
+            @rep_start = i
+            @rep_start_value = current_flow
+            @rep_end = @seqs.size-2
+            @repeated = 1
+            puts "Starting a cycle check at #{i} (of size #{@rep_end-@rep_start})"
+            break
+          end
+        end
+        return
+      end
+
+      if @seqs[@rep_start + @repeated] == current_flow
+        if @repeated + @rep_start - 1 == @rep_end
+          return calculate_estimation
+        end
+        @repeated += 1
+      else
+        puts "Reseting a #{@repeated} cycle"
+        @repeated = 0
+        @rep_start = -1
+        @rep_start_value = -1
+      end
+
+      nil
+    end
+
+    def calculate_estimation
+      puts "N cycle stops process"
+      puts @seqs_data[@rep_start].to_s
+      puts @seqs_data[@rep_end+1].to_s
+
+      dh = @seqs_data[@rep_end+1][:height] - @seqs_data[@rep_start][:height]
+      dp = @seqs_data[@rep_end+1][:iteration] - @seqs_data[@rep_start][:iteration]
+      div, mod = (dh*@estimate).divmod(dp)
+      puts "#{div}, #{mod}"
+
+      [div, mod]
     end
 
     def next_rock
@@ -204,67 +313,44 @@ module Advent2022
     end
 
     def next_flow
-      dir = @jet[@flow % @jet.size]
-      @flow+= 1
+      @flow = (@flow + 1) % @jet.size
+      dir = @jet[@flow]
 
-      dir
+      dir == "<" ? -1 : 1
     end
 
-    def self.from(data)
-      data = File.read(data) if File.exist?(data)
-
-      l = data.strip
-      PyroclasticFlow.new(l)
-    end
-
-    def free_throw
+    def free_throw(current_piece)
       fall = true
       rock = next_rock
       cave.add_rock(rock)
-      seq = rock.name.to_s
+      if @estimating
+        estimation = record(current_piece, rock.name, @flow, cave.height)
+        return estimation unless estimation.nil?
+      end
       while fall do
         dir = next_flow
-        cave.move(dir)
-        seq += dir
-        #cave.print
+        moved = cave.move(dir)
         fall = cave.fall
-        #cave.print
       end
 
-      seq
+      puts "#{current_piece} / #{cave.top} / #{cave.height} ---------------------------" if current_piece % 100000 == 0
+      nil
     end
-
-    def play(n=1)
-      @seqs = {}
-      #cave.print
-      1.upto(n) do |i|
-        puts "#{i} / #{cave.top} / #{cave.height} ---------------------------" if i % 100000 == 0
-        seq = free_throw
-
-        if @seqs[seq]
-          #puts "#{i}: Repeated #{seq} #{@seqs[seq].size} at #{i} - #{cave.height}"
-          puts "#{i} => #{cave.height*1000000000000/i}" if i % 10000 == 0
-        end
-        @seqs[seq] = i unless @seqs.size > 200
-      end
-
-      cave.height
-    end
-
   end
 
   class Day17
     def self.run(argv)
       jet_pattern = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>"
-      #o = PyroclasticFlow.from(jet_pattern, true)
+      #o = PyroclasticFlow.from(jet_pattern)
       o = PyroclasticFlow.from(argv[0])
-     
+
       puts "Part 1: #{o.play(2022)}"
 
-      #o = PyroclasticFlow.from(argv[0])
-      #o = PyroclasticFlow.from(jet_pattern)
-      #puts "Part 2: #{o.play(1000000000000)}"
-      puts "Part 2: NOT YET"
+      #o = PyroclasticFlow.from(argv[0], true)
+      o = PyroclasticFlow.from(jet_pattern, true)
+      o.estimate
+      puts "Part 2: #{o.play(1000000000000)}"
+      #puts "Part 2: NOT YET"
     end
   end
 end
