@@ -7,7 +7,7 @@ module Advent2022
     def test_from
       pv = ProboscideaVolcanium.from(sample)
 
-      assert_equal ["AA", "BB", "CC", "DD", "EE", "FF", "GG", "HH", "II", "JJ" ], pv.graph.vertices
+      assert_equal ["AA", "BB", "CC", "DD", "EE", "FF", "GG", "HH", "II", "JJ" ], pv.graph.vertices_names
       assert_equal 3, pv.graph.vertex("EE").flow_rate
       assert_equal ["GG"], pv.graph.neighbours_names("HH")
       assert_equal 2, pv.graph.neighbours("II").size
@@ -16,7 +16,7 @@ module Advent2022
 
     def test_example_path_progress
       pv = ProboscideaVolcanium.from(sample)
-      path = CavePath.new("AA", pv.valves)
+      path = CavePath.new("AA", pv.graph)
 
       assert_path(path, 0, "AA", ["AA"], 0)
       assert_equal false, path.openable?
@@ -109,7 +109,7 @@ module Advent2022
       assert_equal 1651, path.pressure_release(30)
     end
 
-    def test_most_pressure
+    def xtest_most_pressure
       pv = ProboscideaVolcanium.from(sample)
       starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       pressure, paths = pv.most_pressure
@@ -118,6 +118,17 @@ module Advent2022
       assert_equal 1651, pressure
       puts "T. Elapsed: #{ending-starting} sec"
     end
+
+    def test_most_pressure_iterative
+      pv = ProboscideaVolcanium.from(sample)
+      starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      pressure, paths = pv.most_pressure_iterative
+      ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      assert_equal 1651, pressure
+      puts "T. Elapsed: #{ending-starting} sec"
+    end
+
 
     def assert_path(path, time, valve, visited, pressure, finished=false)
       assert_equal time, path.time
