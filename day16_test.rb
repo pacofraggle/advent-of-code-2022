@@ -109,26 +109,40 @@ module Advent2022
       assert_equal 1651, path.pressure_release(30)
     end
 
-    def xtest_most_pressure
-      pv = ProboscideaVolcanium.from(sample)
-      starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      pressure, paths = pv.most_pressure
-      ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-
-      assert_equal 1651, pressure
-      puts "T. Elapsed: #{ending-starting} sec"
-    end
-
     def test_most_pressure_iterative
       pv = ProboscideaVolcanium.from(sample)
-      starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       pressure, paths = pv.most_pressure_iterative
-      ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
       assert_equal 1651, pressure
-      puts "T. Elapsed: #{ending-starting} sec"
     end
 
+    def test_example_path_with_elephant_progress
+      pv = ProboscideaVolcanium.from(sample)
+      path = CavePathWithElephant.new("AA", "AA", pv.graph)
+
+      path.go_open_two("DD", "JJ")
+      assert_equal 2, path.time_el
+      assert_equal 3, path.time
+      assert_equal 20*(26-2) + 21*(26-3), path.pressure_release
+
+      path.go_open_two("HH", "BB")
+      assert_equal 7, path.time_el
+      assert_equal 7, path.time
+      assert_equal 963 + 22*(26-7) + 13*(26-7), path.pressure_release
+
+      path.go_open_two("EE", "CC")
+      assert_equal 11, path.time_el
+      assert_equal 9, path.time
+      assert_equal 1628 + 2*(26-9) + 3*(26-11), path.pressure_release
+    end
+
+
+    def test_most_pressure_with_elephant
+      pv = ProboscideaVolcanium.from(sample)
+      pressure, paths = pv.most_pressure_iterative(true)
+
+      assert_equal 1707, pressure
+    end
 
     def assert_path(path, time, valve, visited, pressure, finished=false)
       assert_equal time, path.time
