@@ -4,81 +4,86 @@ require 'io/console'
 
 module Advent2022
   class Valley
-    Location = Struct.new(:row, :col) do
+    MOVES = {
+      'v' => [1, 0],
+      '^' => [-1, 0],
+      '<' => [0, -1],
+      '>' => [0, 1]
+    }.freeze
+
+    class Node 
+      attr_accessor :t, :location, :neighbours
+
+      def initialize(t, location)
+        @t = t
+        @location = location
+        @neighbours = []
+      end
+
+      def add_neighbour(neighbour)
+        @neighbours << neighbour
+      end
+    end
+
+    Location = Struct.new(:row, :col, :valley) do
       def to_s
         "(#{row}, #{col})" 
       end
 
-      def up
-        Location.new(row-1, col)
-      end
-      def down
-        Location.new(row+1, col)
-      end
-      def left
-        Location.new(row, col-1)
-      end
-      def right
-        Location.new(row, col+1)
+      def can_move?(shift_row, shift_col)
+        rt = row + shift_row
+        ct = col + shift_col
+
+        (rt == valley.exit.row && ct == valley.exit.col) || (rt == valley.start.row && ct == valley.start.col) || 
+        (rt >= valley.rmin && rt <= valley.rmax && ct >=valley.cmin && ct <= valley.cmax)
       end
 
-      def d(other)
-        (other.row - self.row).abs + (other.col - self.col).abs
+      def move(shift_row, shift_col)
+        return false unless can_move?(shift_row, shift_col)
+
+        row += shift_row
+        col += shift_col
+
+        true
       end
 
-      def self.cache(dexit, width, height)
-        @@dexit = Array.new(width)
-        0.upto(width-1) { |i| @@dexit[i] = Array.new(height) }
-        @@dexit.each_with_index do |row, i|
-          row.each_with_index do |cell, j|
-           @@dexit[i][j] = (dexit.row - i).abs + (dexit.col - j).abs
-          end
-        end
+      def alternative(shift_row=0, shift_col=0)
+        return false unless can_move?(shift_row, shift_col)
+
+        Location.new(row + shift_row, col + shift_col, valley)
       end
 
       def dexit
-        @@dexit[self.row][self.col]
+        # TODO: cache this?
+        (row - valley.exit.row).abs + (col - valley.exit.col).abs
       end
     end
 
     class Blizzard
-      MOVES = {
-        'v' => [1, 0],
-        '^' => [-1, 0],
-        '<' => [0, -1],
-        '>' => [0, 1]
-      }.freeze
-
       attr_reader :type, :origin
       attr_accessor :current
 
       def initialize(type, origin)
         @type = type
-        @origin = origin
-        @current = @origin.dup
+        @origin = Location.new(origin.row, origin.col, origin.valley)
+        @valley = origin.valley
+        @current = Location.new(origin.row, origin.col, origin.valley)
       end
 
-      def move(min, rmin, cmin, rmax, cmax)
-        @current = @origin.dup
-        shift = MOVES[@type]
-        min.times do |t|
-          @current.row += shift[0]
-          @current.col += shift[1]
-          @current.col = 1 if @current.col > cmax
-          @current.col = cmax  if @current.col < cmin
-          @current.row= 1 if @current.row > rmax
-          @current.row = rmax  if @current.row < rmin
-        end
+      def move(t=1)
+        min.times { |t| shift }
       end
 
-      def shift(rmin, cmin, rmax, cmax)
-        shift = MOVES[@type]
+      def shift
+        shift = Valley::MOVES[@type]
         @current.row += shift[0]
         @current.col += shift[1]
-        @current.col = 1 if @current.col > cmax
-        @current.col = cmax  if @current.col < cmin
-        @current.row= 1 if @current.row > rmax
-        @current.row = rmax  if @current.row < rmin
+        @current.col = @valley.cmin if @current.col > @valley.cmax
+        @current.col = @valley.cmax  if @current.col < @valley.cmin
+        @current.row = @valley.rmin if @current.row > @valley.rmax
+        @current.row = @valley.rmax  if @current.row < @valley.rmin
+
+        return @current.row, @current.col
       end
 
       def to_s
@@ -86,7 +91,7 @@ module Advent2022
       end
     end
 
-    INFINITY = 4294967295
+    attr_reader :blizzards, :rmin, :rmax, :cmin, :cmax, :start, :exit
 
     def initialize
       @rows = []
@@ -98,276 +103,86 @@ module Advent2022
       @elf = @start.dup
     end
 
+    def blank_row
+      "#"+".".ljust(cmax, ".")+"#"
+    end
+
     def add(line)
       if line.chars.count("#") > 2
         @rows << line
         set_accesses(line)
       else
-        @rows << "#"+".".ljust(line.size-2, ".")+"#"
+        @rows << blank_row.clone
         set_blizzards(line)
       end
     end
 
-    def at(min, path, shift=false)
-      #puts "at #{min}----------"
-      #puts path.to_s
-      recalculate_blizzards(min, shift)
-      #print
-      success = move_elf(min, path)
-      #print
+    def minutes_to_exit
+      nodes = []
+      nodes[0] = [Node.new(0, @start)]
+      t = 1
+      exit_found = false
+      until exit_found do
+        recalculate_blizzards
+        nodes[t] = moves_from(t, nodes[t-1])
 
-      success
-    end
-    
-    def move_elf(t, path)
-      #puts "move_elf #{t}----------"
+        exit_found = !(nodes[t].find { |n| n.location.dexit == 0 }).nil?
 
-      # Reproducing
-      if path[t]
-        #puts path.values.map { |p| p.to_s }.join(", ")
-        #puts "#{t}: Reproducing #{path[t]}"
-        choice = path[t] #opts.select { |op| op == path[t] }.first
-
-        raise 'Error' unless choice
-
-        @elf.row = choice.row
-        @elf.col = choice.col
-
-        return true
-      end
-
-      opts = elf_options
-      if opts.size == 0
-        #puts "#{t}: No alternatives"
-        return false 
-      end
-
-      # Only one way
-      if opts.size == 1
-        best = opts.first
-        @elf.row = best.row
-        @elf.col= best.col
-        path[t] = best
-        #puts "#{t}: OneWay #{path[t]}"
-
-        return true
-      end
-
-      #puts alternativesputs 'Several options'
-      best = choose_closest(opts)
-      if best.size == 1
-        #puts "Best is #{best}"
-        best = best.first
-
-        @elf.row = best.row
-        @elf.col= best.col
-
-        path[t] = best
-        #puts "#{t}: Closest best #{path[t]}"
-
-        return true
-      end
-
-      #puts 'Argh'
-      #if path[min].nil?
-      path[t] = best # Array
-      #puts "#{t}: Various routes #{path[t]}"
-
-      false
-    end
-
-    def choose_closest(opts)
-      #min = opts.map { |opt| opt.d(@exit) }.min
-
-      #opts.select { |o| o.d(@exit) == min }
-      opts.sort_by { |opt| opt.dexit }
-    end
-    
-    def routes
-      Valley::Location.cache(@exit, @rows.size, @rows[0].size)
-      q = []
-      q << {}
-
-      variants = Set.new
-      explored = Set.new
-      min_variant = INFINITY
-      until q.empty? do
-        path = q.shift
-
-        if exit?(path)
-          puts "Solution found #{path.size}"
-          variants << path
-          min_variant = [min_variant, path.size].min
-          next
-        end
-
-        puts "Q size #{q.size}. Path: #{path.size} Packed: #{explored.size}" if q.size % 200 == 0 || explored.size % 500 == 0
-        alternatives = get_out(path)
-
-        next if alternatives.nil?
-
-        alternatives.each do |alt|
-          next if alt.size > min_variant
-
-          if !explored.include?(alt)
-            explored << alt
-
-            found = q.find { |elm| equivalent?(alt, elm) }
-            q << alt unless found
-          end
-        end
-      end
-
-      variants
-    end
-
-    def prune_equivalents(q)
-      list = q.to_a
-      
-      list.each_with_index do |elm, i|
-        next if elm.nil?
-        (i+1).upto(list.size-1) do |j|
-          elm2 = list[j]
-          next if elm2.nil?
-          if equivalent?(elm, elm2)
-            q.delete(list[j])
-          end
-        end
-      end
-    end
-
-    def include?(path, explored)
-      found = explored.find { |ex| equivalent?(path, ex) }
-
-      !found.nil?
-    end
-
-
-    def equivalent?(path, other)
-      min = [path.size, other.size].min
-
-      t = path.keys.last
-
-      path[t] == other[t]
-    end
-
-
-    def exit?(path)
-      t = path.keys.last
-      path[t] == @exit
-    end
-
-    def already_visited?(path, visited)
-      selected = visited.select { |v| v.size >= path.size }
-      selected.each do |sel|
-        return true if equivalent?(path, sel)
-      end
-
-      false 
-    end
-
-    def trim(path, q)
-      selected = q.select { |v| v.size <= path.size }
-      save = []
-      selected.each do |sel|
-        save << sel unless equivalent?(sel, path)
-      end
-
-      save
-    end
-
-
-    def found(alt, variants)
-      variants.each do |variant|
-        min = [alt.size, variant.size].min
-        equal = true
-        0.upto(min-1) do |i|
-          if variant[i] != alt[i]
-            equal = false
-            break
-          end
-        end
-        return true if equal
-      end
-
-      false
-    end
-
-    def get_out(path = {})
-      #puts "getout----------"
-#binding.pry
-      if path.empty?
-        add_elf
-        t = 1
-      else
-        t = path.keys.last
-        @elf.row = path[t].row
-        @elf.col = path[t].col
-      end
-      shift = false
-      until @elf == @exit
-        success = at(t, path, shift)
-        shift = true
+        #puts "t=#{t} : #{nodes[t].size}"
         t += 1
-        next if success
-
-        options = path[t-1]
-        return nil if options.nil?  
-
-        next unless options.is_a?(Array) 
-        
-        alts = []
-        options.each do |op|
-          pth = path.dup
-          pth[t-1] = op
-          alts << pth
-        end
-        path.delete(t-1)
-#binding.pry if t > 8
-        return alts
       end
 
-#binding.pry
-      [path.dup]
+      t - 1
+    end
+    
+    def moves_from(t, safe_nodes)
+      available = {}
+      all = []
+      safe_nodes.each do |spot|
+        opts = candidates_from(spot)
+        opts.each do |opt| 
+          if available.dig(opt.row, opt.col)
+            node = available[opt.row][opt.col]
+          else
+            node = Node.new(t, opt)
+            available[opt.row] ||= {}
+            available[opt.row][opt.col] = node
+            all << node
+          end
+
+          spot.add_neighbour(node)
+        end
+      end
+
+      all.sort_by { |p| p.location.dexit }
     end
 
-    def recalculate_blizzards(min, shift)
-      if shift
-        @blizzards.each do |b|
-          b.shift( 1, 1, @rows.size-2, @rows[0].size-2)
-        end 
-      else
-        @blizzards.each do |b|
-          b.move(min, 1, 1, @rows.size-2, @rows[0].size-2)
-        end 
-      end 
-    end
-
-    def elf_options
-      down = @elf.down 
-      return [down] if down == @exit
-
+    def candidates_from(node)
       viable = []
-      viable << down if @elf.row < @rows.size-2
-      viable << @elf.up if @elf.row > 1
-      viable << @elf.right if @elf.col < @rows[0].size-1 && @elf != @start
-      viable << @elf.left if @elf.col > 1 && @elf != @start
-      viable << @elf.dup
+      if available?(node.location) && node.location != @start
+        viable << node.location.alternative
+      end
+      MOVES.each do |desc, shift|
+        row, col = *shift
+        alt = node.location.alternative(row, col)
 
-      nearb = @blizzards.select do |b|
-        b.current.row>=@elf.row-1 && b.current.row<=@elf.row+1 &&
-        b.current.col>=@elf.col-1 && b.current.col<=@elf.col+1
+        viable << alt if alt && alt != @start && available?(alt)
       end
- 
-      chosen = []
-      viable.each do |option|
-        #puts " viable? #{option}"
-        if nearb.find { |b| option == b.current }.nil?
-          #puts "  #{option} is viable"
-          chosen << option
-        end
+
+      viable
+    end
+
+    def recalculate_blizzards
+      rmin.upto(rmax) { |i| @rows[i] = blank_row.clone }
+     
+      @blizzards.each do |b|
+        b.shift
+        @rows[b.current.row][b.current.col] = "#"
       end
-      chosen
+    end
+
+    def available?(location)
+      @rows[location.row][location.col] == "."
     end
 
     def reproduce_variant(path)
@@ -395,7 +210,7 @@ module Advent2022
         current = @area[pos.row][pos.col] 
         @area[pos.row][pos.col] = if current == '.'
                                     b.type
-                                  elsif Blizzard::MOVES.keys.include?(current)
+                                  elsif MOVES.keys.include?(current)
                                     "2"
                                   else
                                     (@area[pos.row][pos.col].to_i + 1).to_s
@@ -419,7 +234,7 @@ module Advent2022
       i = @rows.size - 1
       line.chars.each_with_index do |ch, j|
         if ch != "#" && ch != "."
-          @blizzards << Blizzard.new(ch, Location.new(i, j))
+          @blizzards << Blizzard.new(ch, Location.new(i, j, self))
         end
       end
     end
@@ -434,15 +249,20 @@ module Advent2022
       end
 
       if @rows.size == 1
-        @start = Location.new(0, access)
+        @cmin ||= 1
+        @rmin ||= 1
+        @cmax ||= @rows[0].size-2
+
+        @start = Location.new(0, access, self)
       else
-        @exit = Location.new(@rows.size-1, access)
+        @rmax ||= @rows.size-2
+
+        @exit = Location.new(@rows.size-1, access, self)
       end
     end
   end
 
   class BlizzardBasin
-  
     attr_reader :valley
 
     def initialize
@@ -453,14 +273,8 @@ module Advent2022
       @valley.add(line)
     end
 
-    def find_routes
-      routes = @valley.routes
-
-      routes.each do |r|
-        puts r.map { |p, v| v.to_s }.join(", ")
-        #@valley.reproduce_variant(r)
-      end
-      routes.map { |r| r.size }.min
+    def reach_goal
+      valley.minutes_to_exit
     end
 
     def self.from(data)
@@ -480,7 +294,7 @@ module Advent2022
     def self.run(argv)
       o = BlizzardBasin.from(argv[0])
 
-      puts o.find_routes
+      puts "Part 1: #{o.reach_goal}"
     end
   end
 end
