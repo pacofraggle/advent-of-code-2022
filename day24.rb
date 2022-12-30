@@ -126,6 +126,9 @@ module Advent2022
         recalculate_blizzards
         nodes[t] = moves_from(t, nodes[t-1])
 
+        if nodes[t].size == 0
+          binding.pry
+        end
         exit_found = !(nodes[t].find { |n| n.location.dexit == 0 }).nil?
 
         #puts "t=#{t} : #{nodes[t].size}"
@@ -135,6 +138,12 @@ module Advent2022
       t - 1
     end
     
+    def flip_dest
+      temp = @exit
+      @exit = @start
+      @start = temp
+    end
+
     def moves_from(t, safe_nodes)
       available = {}
       all = []
@@ -159,7 +168,7 @@ module Advent2022
 
     def candidates_from(node)
       viable = []
-      if available?(node.location) && node.location != @start
+      if available?(node.location) #&& node.location != @start
         viable << node.location.alternative
       end
       MOVES.each do |desc, shift|
@@ -183,23 +192,6 @@ module Advent2022
 
     def available?(location)
       @rows[location.row][location.col] == "."
-    end
-
-    def reproduce_variant(path)
-      add_elf
-      $stdout.clear_screen
-      t = 0
-      until @elf == @exit
-        puts path.map { |p, v| v.to_s }.join(", ")
-        print
-        t += 1
-        success = at(t, path)
-        #puts "Minute #{t} ==================="
-        print
-        raise 'Problem' unless success
-        STDIN.getch
-        $stdout.clear_screen
-      end
     end
 
     def area
@@ -290,11 +282,32 @@ module Advent2022
     end
   end
 
+  # The visualization is broken and I totally removed the tests
+  # For the solution I simply built a graph with the path that gets
+  # discovered after each minute
+  # I was planning to used Dijkstra to traverse the graph, but it is enough
+  # with the time to find an exit
+  #
+  # For part two, switching the start and exit did it
+  # I think this got speeded up when I realized that there were
+  # many more blizzards than empty spaces
+  # At that moment I decided to create "snapshots" of the map instead of
+  # comparing against the full +2600 blizzards
   class Day24
     def self.run(argv)
       o = BlizzardBasin.from(argv[0])
 
-      puts "Part 1: #{o.reach_goal}"
+      reach_goal = o.reach_goal
+      puts "Part 1: #{reach_goal}"
+
+      o.valley.flip_dest
+      go_back = o.reach_goal
+      puts "  ... go back, get the snacks: #{go_back}"
+      o.valley.flip_dest
+      exit_again = o.reach_goal
+      puts "  ... return to the exit: #{exit_again}"
+
+      puts "Part 2: #{reach_goal+go_back+exit_again}"
     end
   end
 end
