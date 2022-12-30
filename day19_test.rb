@@ -28,16 +28,43 @@ module Advent2022
       assert_equal 12, first.geode_robot.obsidian
     end
 
-    def test_collector
+    def test_can_build_robot
       nem = NotEnoughMinerals.from(sample)
-      c = nem.collector(1)
+      bp = nem.blueprints[1]
 
-      1.upto(24) do |_|
-        c.execute
-        puts "minute #{c.minute} ==================="
-        puts "  Stock:  #{c.stock}"
-        puts "  Robots: #{c.robots}"
-      end
+      assert_equal false, bp.can_build_robot?(type: :ore, stock: [3, 0, 0, 0])
+      assert_equal true, bp.can_build_robot?(type: :ore, stock: [4, 0, 0, 0])
+
+      assert_equal false, bp.can_build_robot?(type: :clay, stock: [1, 0, 0, 0])
+      assert_equal true, bp.can_build_robot?(type: :clay, stock: [2, 0, 0, 0])
+
+      assert_equal false, bp.can_build_robot?(type: :obsidian, stock: [4, 13, 0, 0])
+      assert_equal true, bp.can_build_robot?(type: :obsidian, stock: [3, 14, 0, 0])
+
+      assert_equal false, bp.can_build_robot?(type: :geode, stock: [3, 0, 6, 0])
+      assert_equal true, bp.can_build_robot?(type: :geode, stock: [2, 0, 7, 0])
+    end
+
+    def test_can_build
+      nem = NotEnoughMinerals.from(sample)
+      bp = nem.blueprints[1]
+
+      assert_equal [:ore, :clay, :obsidian, :geode], bp.can_build(stock: [4, 14, 7, 0])
+      assert_equal [:clay, :obsidian, :geode], bp.can_build(stock: [3, 14, 7, 0])
+      assert_equal [], bp.can_build(stock: [1, 14, 7, 0])
+    end
+
+    def test_find_max_24
+      nem = NotEnoughMinerals.from(sample)
+      assert_equal 9, nem.find_max(1, 24)
+      assert_equal 12, nem.find_max(2, 24)
+    end
+
+    def test_find_max_32
+      nem = NotEnoughMinerals.from(sample)
+
+      assert_equal 56, nem.find_max(1, 32)
+      assert_equal 62, nem.find_max(2, 32)
     end
 
     def sample
